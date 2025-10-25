@@ -24,7 +24,10 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         title TEXT NOT NULL,
-        description TEXT,
+        description_zh TEXT,
+        description_en TEXT,
+        description_ja TEXT,
+        description_ko TEXT,
         price REAL NOT NULL,
         category TEXT,
         condition TEXT,
@@ -34,6 +37,18 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users (id)
     )
     ''')
+    
+    # 为已有表添加多语言描述字段（兼容现有数据）
+    try:
+        c.execute('ALTER TABLE products ADD COLUMN description_zh TEXT')
+        c.execute('ALTER TABLE products ADD COLUMN description_en TEXT')
+        c.execute('ALTER TABLE products ADD COLUMN description_ja TEXT')
+        c.execute('ALTER TABLE products ADD COLUMN description_ko TEXT')
+        # 将现有description数据复制到description_zh（假设原数据为中文）
+        c.execute('UPDATE products SET description_zh = description WHERE description IS NOT NULL')
+    except sqlite3.OperationalError:
+        # 如果字段已存在，则忽略错误
+        pass
     
     # 创建消息表
     c.execute('''

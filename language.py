@@ -85,9 +85,13 @@ TRANSLATIONS = {
             "back_to_list": "返回列表"
         },
         "product": {
+            "multilingual_description": "多语言描述",
+            "optional_description": "可选",
+            "at_least_one_description_required": "至少需要提供一种语言的描述",
             "publish_title": "发布新商品",
             "product_name": "商品名称",
             "product_description": "商品描述",
+            "product_image": "商品图片",
             "product_price": "商品价格",
             "product_category": "商品分类",
             "product_image": "商品图片",
@@ -100,6 +104,7 @@ TRANSLATIONS = {
             "deleted_success": "商品删除成功！",
             "seller": "卖家",
             "contact_seller": "联系卖家",
+            "image_not_found": "图片未找到或已被删除",
             "cannot_contact_self": "您不能联系自己",
             "login_to_contact": "请先登录后联系卖家",
             "title": "商品标题",
@@ -136,7 +141,8 @@ TRANSLATIONS = {
                 "minor_wear": "轻微使用痕迹",
                 "normal": "正常使用",
                 "heavy_wear": "使用较久"
-            }
+            },
+            "image_not_found": "图片文件不存在"
         },
         "messages": {
             "messages_center": "消息中心",
@@ -266,9 +272,16 @@ TRANSLATIONS = {
             "back_to_list": "Back to List"
         },
         "product": {
+            "multilingual_description": "Multilingual Description",
+            "optional_description": "Optional",
+            "at_least_one_description_required": "At least one language description is required",
             "publish_title": "Publish New Product",
             "product_name": "Product name",
             "product_description": "Description",
+            "multilingual_description": "Multilingual Description",
+            "optional_description": "Optional",
+            "at_least_one_description_required": "At least one language description is required",
+            "product_image": "Product image",
             "product_price": "Price",
             "product_category": "Category",
             "product_image": "Product image",
@@ -317,7 +330,8 @@ TRANSLATIONS = {
                 "minor_wear": "Minor Wear",
                 "normal": "Normal Use",
                 "heavy_wear": "Heavy Use"
-            }
+            },
+            "image_not_found": "Image file not found"
         },
         "messages": {
             "messages_center": "Message Center",
@@ -447,9 +461,13 @@ TRANSLATIONS = {
             "back_to_list": "リストに戻る"
         },
         "product": {
+            "multilingual_description": "多言語説明",
+            "optional_description": "任意",
+            "at_least_one_description_required": "少なくとも1つの言語の説明を提供する必要があります",
             "publish_title": "新しい商品を発表",
             "product_name": "商品名",
             "product_description": "説明",
+            "product_image": "商品画像",
             "product_price": "価格",
             "product_category": "カテゴリー",
             "product_image": "商品画像",
@@ -498,7 +516,8 @@ TRANSLATIONS = {
                 "minor_wear": "軽度の使用痕跡",
                 "normal": "通常の使用状態",
                 "heavy_wear": "激しい使用状態"
-            }
+            },
+            "image_not_found": "画像ファイルが見つかりません"
         },
         "messages": {
             "messages_center": "メッセージセンター",
@@ -628,9 +647,13 @@ TRANSLATIONS = {
             "back_to_list": "목록으로 돌아가기"
         },
         "product": {
+            "multilingual_description": "다국어 설명",
+            "optional_description": "선택사항",
+            "at_least_one_description_required": "적어도 한 가지 언어의 설명을 제공해야 합니다",
             "publish_title": "새 상품 게시",
             "product_name": "상품 이름",
             "product_description": "설명",
+            "product_image": "상품 이미지",
             "product_price": "가격",
             "product_category": "카테고리",
             "product_image": "상품 이미지",
@@ -679,7 +702,8 @@ TRANSLATIONS = {
                 "minor_wear": "약간의 마모",
                 "normal": "정상 사용",
                 "heavy_wear": "심한 마모"
-            }
+            },
+            "image_not_found": "이미지 파일을 찾을 수 없습니다"
         },
         "messages": {
             "messages_center": "메시지 센터",

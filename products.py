@@ -5,16 +5,24 @@ from language import t
 from search import get_category_key, get_condition_key
 
 # 发布商品
-def publish_product(user_id, title, description, price, category, condition, contact_info, image_path=None):
+def publish_product(user_id, title, descriptions, price, category, condition, contact_info, image_path=None):
     conn = get_db_connection()
     c = conn.cursor()
     
     try:
+        # 获取各语言描述，如果没有提供则使用默认语言(中文)的描述
+        description_zh = descriptions.get('zh', '')
+        description_en = descriptions.get('en', description_zh)  # 如果没有英文，使用中文
+        description_ja = descriptions.get('ja', description_zh)  # 如果没有日文，使用中文
+        description_ko = descriptions.get('ko', description_zh)  # 如果没有韩文，使用中文
+        
         c.execute(
             '''INSERT INTO products 
-               (user_id, title, description, price, category, condition, contact_info, image_path, created_at) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (user_id, title, description, price, category, condition, contact_info, image_path, datetime.now())
+               (user_id, title, description_zh, description_en, description_ja, description_ko, 
+                price, category, condition, contact_info, image_path, created_at) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (user_id, title, description_zh, description_en, description_ja, description_ko, 
+             price, category, condition, contact_info, image_path, datetime.now())
         )
         conn.commit()
         return True, t('product.publish_success')
@@ -23,11 +31,23 @@ def publish_product(user_id, title, description, price, category, condition, con
     finally:
         conn.close()
 
-# 获取用户发布的商品
+# 获取用户发布的所有商品
 def get_user_products(user_id):
     conn = get_db_connection()
-    products = conn.execute('SELECT * FROM products WHERE user_id = ? ORDER BY created_at DESC', (user_id,)).fetchall()
+    # 只获取产品ID列表
+    product_ids = [row['id'] for row in conn.execute(
+        'SELECT * FROM products WHERE user_id = ? ORDER BY created_at DESC', 
+        (user_id,)
+    ).fetchall()]
     conn.close()
+    
+    # 使用get_product_details函数处理每个产品，以支持多语言描述
+    products = []
+    for product_id in product_ids:
+        product = get_product_details(product_id)
+        if product:
+            products.append(product)
+    
     return products
 
 # 获取商品详情
@@ -35,33 +55,122 @@ def get_product_details(product_id):
     conn = get_db_connection()
     product = conn.execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
     conn.close()
-    return product
+    
+    # 如果找不到产品，返回None
+    if not product:
+        return None
+    
+    # 获取当前语言的描述
+    from language import get_current_language
+    current_lang = get_current_language()
+    
+    # 为了保持向后兼容性，我们添加一个description属性，根据当前语言返回相应的描述
+    class ProductWithLangDesc:
+        def __init__(self, original_product):
+            # 将SQLite Row对象转换为可修改的字典
+            self.__dict__ = dict(original_product)
+            
+        def __getitem__(self, key):
+            if key == 'description':
+                # 根据当前语言返回相应的描述字段
+                lang_desc_key = f'description_{get_current_language()}'
+                # 如果特定语言的描述为空，则尝试回退到中文描述
+                if lang_desc_key in self.__dict__ and self.__dict__[lang_desc_key]:
+                    return self.__dict__[lang_desc_key]
+                elif 'description_zh' in self.__dict__ and self.__dict__['description_zh']:
+                    return self.__dict__['description_zh']
+                else:
+                    return ''
+            return self.__dict__[key]
+            
+        def get(self, key, default=None):
+            if key == 'description':
+                try:
+                    return self[key]
+                except KeyError:
+                    return default
+            return self.__dict__.get(key, default)
+    
+    return ProductWithLangDesc(product)
+
+# 根据当前语言获取商品描述
+def get_product_description(product):
+    from language import get_current_language
+    current_lang = get_current_language()
+    
+    # 尝试获取当前语言的描述
+    lang_desc_key = f'description_{current_lang}'
+    
+    # 同时支持对象和字典格式的产品数据
+    if isinstance(product, dict):
+        # 优先使用当前语言描述
+        if product.get(lang_desc_key):
+            return product[lang_desc_key]
+        # 降级到中文描述
+        elif product.get('description_zh'):
+            return product['description_zh']
+        # 最后使用原始description字段
+        elif product.get('description'):
+            return product['description']
+    else:
+        # 对象格式的处理
+        if hasattr(product, lang_desc_key) and getattr(product, lang_desc_key):
+            return getattr(product, lang_desc_key)
+        # 降级到中文描述
+        elif hasattr(product, 'description_zh') and getattr(product, 'description_zh'):
+            return getattr(product, 'description_zh')
+        # 最后使用原始description字段
+        elif hasattr(product, 'description'):
+            return getattr(product, 'description')
+    
+    return ''
 
 # 更新商品
-def update_product(product_id, title, description, price, category, condition, contact_info, image_path=None):
+def update_product(product_id, title, descriptions, price, category, condition, contact_info, image_path=None):
     conn = get_db_connection()
-    c = conn.cursor()
-    
     try:
-        # 准备更新语句，根据是否有新图片来决定是否更新image_path字段
-        if image_path:
-            c.execute(
-                '''UPDATE products SET title = ?, description = ?, price = ?, category = ?, 
-                   condition = ?, contact_info = ?, image_path = ? 
-                   WHERE id = ?''',
-                (title, description, price, category, condition, contact_info, image_path, product_id)
-            )
+        # 准备更新语句
+        update_fields = ['title = ?', 'price = ?', 'category = ?', 'condition = ?', 'contact_info = ?']
+        update_values = [title, price, category, condition, contact_info]
+        
+        # 处理多语言描述字段
+        if isinstance(descriptions, dict):
+            # 为每种支持的语言设置描述
+            for lang in ['zh', 'en', 'ja', 'ko']:
+                update_fields.append(f'description_{lang} = ?')
+                update_values.append(descriptions.get(lang, ''))
+            # 设置默认description字段为中文描述（向后兼容）
+            update_fields.append('description = ?')
+            update_values.append(descriptions.get('zh', ''))
         else:
-            c.execute(
-                '''UPDATE products SET title = ?, description = ?, price = ?, category = ?, 
-                   condition = ?, contact_info = ? 
-                   WHERE id = ?''',
-                (title, description, price, category, condition, contact_info, product_id)
-            )
+            # 向后兼容，单字符串描述
+            update_fields.append('description_zh = ?')
+            update_fields.append('description = ?')
+            update_values.append(descriptions)  # 同时更新zh版本和默认版本
+            # 其他语言保持为空
+            for lang in ['en', 'ja', 'ko']:
+                update_fields.append(f'description_{lang} = ?')
+                update_values.append('')
+        
+        # 如果提供了图片路径，则更新
+        if image_path:
+            update_fields.append('image_path = ?')
+            update_values.append(image_path)
+        
+        # 添加WHERE子句和product_id
+        update_values.append(product_id)
+        
+        # 构建SQL语句
+        sql = f"UPDATE products SET {', '.join(update_fields)} WHERE id = ?"
+        
+        # 执行更新
+        conn.execute(sql, update_values)
         conn.commit()
-        return True, t('product.updated_success')
+        
+        return True, "商品更新成功！"
     except Exception as e:
-        return False, f"{t('product.publish_failed')}: {str(e)}"
+        conn.rollback()
+        return False, f"更新失败: {str(e)}"
     finally:
         conn.close()
 
@@ -98,7 +207,28 @@ def product_publish_page():
                                  t('product.conditions.minor_wear'), t('product.conditions.normal'), 
                                  t('product.conditions.heavy_wear')])
         price = st.number_input(t('product.price'), min_value=0.01, format="%.2f")
-        description = st.text_area(t('product.description'))
+        
+        # 多语言描述输入
+        st.subheader(t('product.multilingual_description'))
+        descriptions = {}
+        
+        # 获取当前语言
+        from language import get_current_language, LANGUAGES
+        current_lang = get_current_language()
+        
+        # 首先显示当前语言的描述输入框
+        descriptions[current_lang] = st.text_area(
+            f"{t('product.product_description')} ({LANGUAGES[current_lang]})")
+        
+        # 然后显示其他语言的描述输入框（可选）
+        for lang in LANGUAGES.keys():
+            if lang != current_lang:
+                descriptions[lang] = st.text_area(
+                    f"{t('product.product_description')} ({LANGUAGES[lang]})", 
+                    placeholder=t('product.optional_description'),
+                    key=f"desc_{lang}")
+        # 保留原始description变量以保持向后兼容，但实际使用多语言描述
+        description = descriptions.get(get_current_language(), '')
         contact_info = st.text_input(t('product.contact_info'))
         
         # 图片上传功能
@@ -107,18 +237,29 @@ def product_publish_page():
         submit = st.form_submit_button(t('product.submit'))
         
         if submit:
-            if not all([title, category, condition, price, description, contact_info]):
+            # 检查必填字段
+            if not all([title, category, condition, price, contact_info]):
                 st.error(t('product.fill_required'))
+            elif not any(descriptions.values()):  # 至少要有一个语言的描述
+                st.error(t('product.at_least_one_description_required'))
             else:
-                # 这里简化处理，实际应用中可以保存图片
+                # 处理图片上传，实际保存到文件系统
                 image_path = None
                 if image:
-                    # 实际应用中可以保存图片到文件系统并记录路径
+                    # 确保images目录存在
+                    import os
+                    if not os.path.exists('images'):
+                        os.makedirs('images')
+                    
+                    # 生成唯一的文件名并保存图片
                     image_path = f"images/{datetime.now().timestamp()}_{image.name}"
+                    with open(image_path, "wb") as f:
+                        f.write(image.getbuffer())
+                    st.success(f"图片已成功上传: {image.name}")
                 
                 success, message = publish_product(
                     st.session_state.user['id'],
-                    title, description, price, category, condition, contact_info, image_path
+                    title, descriptions, price, category, condition, contact_info, image_path
                 )
                 
                 if success:
@@ -152,10 +293,19 @@ def product_management_page():
                 st.write(f"{t('product.condition')}: {t(f'product.conditions.{cond_key}')}")
                 st.write(f"{t('product.created_at')}: {product['created_at']}")
                 st.write(f"{t('product.contact_info')}: {product['contact_info']}")
+                
+                # 如果有图片路径，先检查文件是否存在再显示
+                if product['image_path']:
+                    import os
+                    if os.path.exists(product['image_path']):
+                        st.subheader(t("product.product_image"))
+                        st.image(product['image_path'], width=200)
+                    else:
+                        st.warning(t("product.image_not_found"))
             
             with col2:
-                st.write(t('product.description') + ":")
-                st.write(product['description'])
+                # 使用当前语言显示商品描述
+                st.write(f"**{t('product.description')}:** {product['description']}")
                 
                 # 编辑和删除功能
                 if st.button(t('product.edit'), key=f"edit_{product['id']}"):
@@ -232,7 +382,34 @@ def product_management_page():
                     index=condition_index
                 )
                 edit_price = st.number_input(t('product.price'), min_value=0.01, format="%.2f", value=product['price'])
-                edit_description = st.text_area(t('product.description'), value=product['description'])
+                
+                # 多语言描述编辑
+                st.subheader(t('product.multilingual_description'))
+                edit_descriptions = {}
+                
+                # 获取当前语言
+                from language import get_current_language, LANGUAGES
+                current_lang = get_current_language()
+                
+                # 尝试从产品对象获取各语言描述
+                for lang in LANGUAGES.keys():
+                    desc_key = f'description_{lang}'
+                    # 如果有该语言的描述字段且存在值，则使用该值，否则使用当前语言的description
+                    if hasattr(product, desc_key) and getattr(product, desc_key):
+                        default_desc = getattr(product, desc_key)
+                    elif product.get(desc_key):
+                        default_desc = product[desc_key]
+                    else:
+                        default_desc = product['description']
+                    
+                    # 为每种语言创建文本区域
+                    edit_descriptions[lang] = st.text_area(
+                        f"{t('product.product_description')} ({LANGUAGES[lang]})",
+                        value=default_desc,
+                        key=f"edit_desc_{lang}_{product['id']}")
+                
+                # 保留原始edit_description变量以保持向后兼容
+                edit_description = edit_descriptions.get(current_lang, '')
                 edit_contact_info = st.text_input(t('product.contact_info'), value=product['contact_info'])
                 
                 # 图片上传功能（可选）
@@ -252,13 +429,25 @@ def product_management_page():
                         # 处理图片（如果有新上传）
                         edit_image_path = product['image_path']  # 默认保留原图片
                         if edit_image:
-                            # 实际应用中可以保存图片到文件系统并记录路径
+                            # 确保images目录存在
+                            import os
+                            if not os.path.exists('images'):
+                                os.makedirs('images')
+                            
+                            # 生成唯一的文件名并保存图片
                             edit_image_path = f"images/{datetime.now().timestamp()}_{edit_image.name}"
+                            with open(edit_image_path, "wb") as f:
+                                f.write(edit_image.getbuffer())
+                            st.success(f"图片已成功更新: {edit_image.name}")
                         
-                        success, message = update_product(
-                            product['id'],
-                            edit_title, edit_description, edit_price, edit_category, edit_condition, edit_contact_info, edit_image_path
-                        )
+                        # 检查必填字段
+                        if not any(edit_descriptions.values()):  # 至少要有一个语言的描述
+                            st.error(t('product.at_least_one_description_required'))
+                        else:
+                            success, message = update_product(
+                                product['id'],
+                                edit_title, edit_descriptions, edit_price, edit_category, edit_condition, edit_contact_info, edit_image_path
+                            )
                         
                         if success:
                             st.success(message)

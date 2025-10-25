@@ -68,8 +68,18 @@ def search_products(keyword=None, category=None, min_price=None, max_price=None,
     }
     query += f" ORDER BY {order_map.get(sort_by, 'created_at DESC')}"
     
-    products = conn.execute(query, params).fetchall()
+    # 获取产品ID列表
+    product_ids = [row['id'] for row in conn.execute(query, params).fetchall()]
     conn.close()
+    
+    # 使用get_product_details函数处理每个产品，以支持多语言描述
+    from products import get_product_details
+    products = []
+    for product_id in product_ids:
+        product = get_product_details(product_id)
+        if product:
+            products.append(product)
+    
     return products
 
 # 获取所有商品类别
@@ -121,13 +131,15 @@ def display_search_results(products):
     
     # 检查是否有选中的商品详情需要显示
     if 'showing_detail' in st.session_state:
-        for product in products:
-            if product['id'] == st.session_state.showing_detail:
-                show_product_detail(product)
-                # 添加返回按钮
-                if st.button(t("search.back_to_list"), key="back_to_list"):
-                    del st.session_state.showing_detail
-                return
+        # 当显示详情时，我们应该直接使用get_product_details获取最新的多语言产品数据
+        from products import get_product_details
+        product = get_product_details(st.session_state.showing_detail)
+        if product:
+            show_product_detail(product)
+            # 添加返回按钮
+            if st.button(t("search.back_to_list"), key="back_to_list"):
+                del st.session_state.showing_detail
+        return
     
     # 如果没有点击详情按钮，则显示商品列表
     st.subheader(f"{t('search.results_found')} {len(products)} {t('search.products')}")
@@ -183,9 +195,14 @@ def show_product_detail(product):
         st.subheader(t("product.description"))
         st.write(product['description'])
         
-        # 如果有图片，可以在这里显示
-        # if product['image_path']:
-        #     st.image(product['image_path'])
+        # 如果有图片，显示图片
+        if product['image_path']:
+            import os
+            if os.path.exists(product['image_path']):
+                st.subheader(t("product.product_image"))
+                st.image(product['image_path'])
+            else:
+                st.warning(t("product.image_not_found"))
     
     # 联系信息部分可以保留，但鼓励用户通过系统消息联系
     st.subheader(t("product.contact"))
